@@ -1,0 +1,7 @@
+14:10:49 **** Incremental Build of configuration Debug for project server.project ****
+Info: Internal Builder is used for build
+gcc -O0 -g3 -Wall -c -fmessage-length=0 -o server.o "..\\server.c" 
+gcc -o server.project.exe server.o -lwsock32 
+
+14:10:51 Build Finished (took 1s.512ms)
+

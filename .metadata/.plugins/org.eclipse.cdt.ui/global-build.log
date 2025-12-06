@@ -1,0 +1,169 @@
+13:59:28 **** Rebuild of configuration Debug for project client.project ****
+Info: Internal Builder is used for build
+gcc -O0 -g3 -Wall -c -fmessage-length=0 -o client.o "..\\client.c" 
+..\client.c: In function 'main':
+..\client.c:47:17: error: 'SERVER_PORT' undeclared (first use in this function); did you mean 'SERVER_WRITE'?
+     int porta = SERVER_PORT;
+                 ^~~~~~~~~~~
+                 SERVER_WRITE
+..\client.c:47:17: note: each undeclared identifier is reported only once for each function it appears in
+..\client.c:48:5: error: unknown type name 'weather_request_t'
+     weather_request_t richiesta = {0};
+     ^~~~~~~~~~~~~~~~~
+..\client.c:77:22: error: request for member 'type' in something not a structure or union
+             richiesta.type = stringa_richiesta[0];
+                      ^
+..\client.c:96:30: error: request for member 'city' in something not a structure or union
+             strncpy(richiesta.city, &stringa_richiesta[idx], 63);
+                              ^
+..\client.c:97:22: error: request for member 'city' in something not a structure or union
+             richiesta.city[63] = '\0';
+                      ^
+..\client.c:100:33: error: request for member 'city' in something not a structure or union
+             if (strlen(richiesta.city) >= 64) {
+                                 ^
+..\client.c:107:40: error: request for member 'type' in something not a structure or union
+     if (!richiesta_trovata || richiesta.type == 0 || strlen(richiesta.city) == 0) {
+                                        ^
+..\client.c:107:70: error: request for member 'city' in something not a structure or union
+     if (!richiesta_trovata || richiesta.type == 0 || strlen(richiesta.city) == 0) {
+                                                                      ^
+..\client.c:155:49: error: request for member 'type' in something not a structure or union
+     memcpy(buffer_richiesta + offset, &richiesta.type, sizeof(char));
+                                                 ^
+..\client.c:157:48: error: request for member 'city' in something not a structure or union
+     memcpy(buffer_richiesta + offset, richiesta.city, 64);
+                                                ^
+..\client.c:169:5: error: unknown type name 'socklen_t'; did you mean '_locale_t'?
+     socklen_t lunghezza_mittente = sizeof(indirizzo_mittente);
+     ^~~~~~~~~
+     _locale_t
+..\client.c:179:5: error: unknown type name 'weather_response_t'
+     weather_response_t risposta;
+     ^~~~~~~~~~~~~~~~~~
+..\client.c:182:5: error: unknown type name 'uint32_t'; did you mean 'wint_t'?
+     uint32_t net_status;
+     ^~~~~~~~
+     wint_t
+..\client.c:183:58: error: 'uint32_t' undeclared (first use in this function); did you mean 'wint_t'?
+     memcpy(&net_status, buffer_risposta + offset, sizeof(uint32_t));
+                                                          ^~~~~~~~
+                                                          wint_t
+..\client.c:184:13: error: request for member 'status' in something not a structure or union
+     risposta.status = ntohl(net_status);
+             ^
+..\client.c:187:21: error: request for member 'type' in something not a structure or union
+     memcpy(&risposta.type, buffer_risposta + offset, sizeof(char));
+                     ^
+..\client.c:190:13: error: expected ';' before 'temp'
+     uint32_t temp;
+             ^~~~~
+             ;
+..\client.c:191:13: error: 'temp' undeclared (first use in this function); did you mean 'time'?
+     memcpy(&temp, buffer_risposta + offset, sizeof(float));
+             ^~~~
+             time
+..\client.c:193:21: error: request for member 'value' in something not a structure or union
+     memcpy(&risposta.value, &temp, sizeof(float));
+                     ^
+..\client.c:196:32: error: request for member 'city' in something not a structure or union
+     capitalizza_citta(richiesta.city);
+                                ^
+..\client.c:201:17: error: request for member 'status' in something not a structure or union
+     if (risposta.status == STATUS_OK) {
+                 ^
+..\client.c:201:28: error: 'STATUS_OK' undeclared (first use in this function); did you mean 'STATSTG'?
+     if (risposta.status == STATUS_OK) {
+                            ^~~~~~~~~
+                            STATSTG
+..\client.c:202:25: error: request for member 'type' in something not a structure or union
+         switch (risposta.type) {
+                         ^
+..\client.c:204:63: error: request for member 'city' in something not a structure or union
+                 printf("%s: Temperatura = %.1f°C\n", richiesta.city, risposta.value);
+                                                               ^
+..\client.c:204:78: error: request for member 'value' in something not a structure or union
+                 printf("%s: Temperatura = %.1f°C\n", richiesta.city, risposta.value);
+                                                                              ^
+..\client.c:207:59: error: request for member 'city' in something not a structure or union
+                 printf("%s: Umidità = %.1f%%\n", richiesta.city, risposta.value);
+                                                           ^
+..\client.c:207:74: error: request for member 'value' in something not a structure or union
+                 printf("%s: Umidità = %.1f%%\n", richiesta.city, risposta.value);
+                                                                          ^
+..\client.c:210:60: error: request for member 'city' in something not a structure or union
+                 printf("%s: Vento = %.1f km/h\n", richiesta.city, risposta.value);
+                                                            ^
+..\client.c:210:75: error: request for member 'value' in something not a structure or union
+                 printf("%s: Vento = %.1f km/h\n", richiesta.city, risposta.value);
+                                                                           ^
+..\client.c:213:63: error: request for member 'city' in something not a structure or union
+                 printf("%s: Pressione = %.1f hPa\n", richiesta.city, risposta.value);
+                                                               ^
+..\client.c:213:78: error: request for member 'value' in something not a structure or union
+                 printf("%s: Pressione = %.1f hPa\n", richiesta.city, risposta.value);
+                                                                              ^
+..\client.c:217:22: error: request for member 'status' in something not a structure or union
+     else if (risposta.status == STATUS_CITY_NOT_FOUND) {
+                      ^
+..\client.c:217:33: error: 'STATUS_CITY_NOT_FOUND' undeclared (first use in this function); did you mean 'STATUS_DLL_NOT_FOUND'?
+     else if (risposta.status == STATUS_CITY_NOT_FOUND) {
+                                 ^~~~~~~~~~~~~~~~~~~~~
+                                 STATUS_DLL_NOT_FOUND
+..\client.c:179:24: warning: variable 'risposta' set but not used [-Wunused-but-set-variable]
+     weather_response_t risposta;
+                        ^~~~~~~~
+..\client.c:48:23: warning: variable 'richiesta' set but not used [-Wunused-but-set-variable]
+     weather_request_t richiesta = {0};
+                       ^~~~~~~~~
+13:59:30 **** Rebuild of configuration Debug for project server.project ****
+Info: Internal Builder is used for build
+gcc -O0 -g3 -Wall -c -fmessage-length=0 -o server.o "..\\server.c" 
+gcc -o server.project.exe server.o -lwsock32 
+C:/MinGW64/bin/../lib/gcc/x86_64-w64-mingw32/8.1.0/../../../../x86_64-w64-mingw32/lib/../lib/libmingw32.a(lib64_libmingw32_a-crt0_c.o):crt0_c.c:(.text.startup+0x2e): undefined reference to `WinMain'
+collect2.exe: error: ld returned 1 exit status
+14:07:47 **** Incremental Build of configuration Debug for project client.project ****
+Info: Internal Builder is used for build
+gcc -O0 -g3 -Wall -c -fmessage-length=0 -o client.o "..\\client.c" 
+..\client.c: In function 'main':
+..\client.c:94:70: warning: pointer targets in passing argument 6 of 'recvfrom' differ in signedness [-Wpointer-sign]
+     int n=recvfrom(sock,rbuf,RESPONSE_SIZE,0,(struct sockaddr*)&from,&flen);
+                                                                      ^~~~~
+In file included from ..\protocol.h:5,
+                 from ..\client.c:1:
+C:/MinGW64/x86_64-w64-mingw32/include/winsock.h:297:34: note: expected 'int *' but argument is of type 'unsigned int *'
+   WINSOCK_API_LINKAGE int WSAAPI recvfrom(SOCKET s,char *buf,int len,int flags,struct sockaddr *from,int *fromlen);
+                                  ^~~~~~~~
+gcc -o client.project.exe client.o -lwsock32 
+14:07:49 **** Incremental Build of configuration Debug for project server.project ****
+Info: Internal Builder is used for build
+gcc -O0 -g3 -Wall -c -fmessage-length=0 -o server.o "..\\server.c" 
+..\server.c:9: warning: "NO_ERROR" redefined
+ #define NO_ERROR 0
+ 
+In file included from C:/MinGW64/x86_64-w64-mingw32/include/winbase.h:2380,
+                 from C:/MinGW64/x86_64-w64-mingw32/include/windows.h:70,
+                 from C:/MinGW64/x86_64-w64-mingw32/include/winsock.h:10,
+                 from ..\protocol.h:5,
+                 from ..\server.c:1:
+C:/MinGW64/x86_64-w64-mingw32/include/winerror.h:44: note: this is the location of the previous definition
+ #define NO_ERROR __MSABI_LONG(0)
+ 
+..\server.c: In function 'main':
+..\server.c:121:57: warning: pointer targets in passing argument 6 of 'recvfrom' differ in signedness [-Wpointer-sign]
+                          (struct sockaddr*)&client_addr,&client_len);
+                                                         ^~~~~~~~~~~
+In file included from ..\protocol.h:5,
+                 from ..\server.c:1:
+C:/MinGW64/x86_64-w64-mingw32/include/winsock.h:297:34: note: expected 'int *' but argument is of type 'unsigned int *'
+   WINSOCK_API_LINKAGE int WSAAPI recvfrom(SOCKET s,char *buf,int len,int flags,struct sockaddr *from,int *fromlen);
+                                  ^~~~~~~~
+gcc -o server.project.exe server.o -lwsock32 
+14:10:48 **** Incremental Build of configuration Debug for project client.project ****
+Info: Internal Builder is used for build
+gcc -O0 -g3 -Wall -c -fmessage-length=0 -o client.o "..\\client.c" 
+gcc -o client.project.exe client.o -lwsock32 
+14:10:49 **** Incremental Build of configuration Debug for project server.project ****
+Info: Internal Builder is used for build
+gcc -O0 -g3 -Wall -c -fmessage-length=0 -o server.o "..\\server.c" 
+gcc -o server.project.exe server.o -lwsock32 

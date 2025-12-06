@@ -1,0 +1,269 @@
+/* client.c - UDP client per servizio meteo (revisione) */
+
+#include "protocol.h"
+
+#if defined WIN32
+#include <winsock.h>
+#else
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <ctype.h>
+#include <errno.h>
+
+#if defined WIN32
+#define CLOSESOCKET closesocket
+#else
+#define CLOSESOCKET close
+#endif
+
+void usage(const char* nome_programma) {
+    printf("Uso: %s [-s server] [-p port] -r \"type city\"\n", nome_programma);
+}
+
+/* Capitalizza prima lettera di ogni parola */
+void capitalizza_citta(char *citta) {
+    int capitalizza_prossimo = 1;
+    for (int i = 0; citta[i] != '\0'; i++) {
+        if (citta[i] == ' ') {
+            capitalizza_prossimo = 1;
+        } else if (capitalizza_prossimo) {
+            citta[i] = toupper((unsigned char)citta[i]);
+            capitalizza_prossimo = 0;
+        } else {
+            citta[i] = tolower((unsigned char)citta[i]);
+        }
+    }
+}
+
+/* Conversioni float <-> network (helper) */
+uint32_t float_to_net(float f) {
+    uint32_t x;
+    memcpy(&x, &f, sizeof(float));
+    return htonl(x);
+}
+float float_from_net(uint32_t net) {
+    uint32_t host = ntohl(net);
+    float f;
+    memcpy(&f, &host, sizeof(float));
+    return f;
+}
+
+int main(int argc, char* argv[]) {
+#if defined WIN32
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
+        fprintf(stderr, "WSAStartup failed\n");
+        return 1;
+    }
+#endif
+
+    char nome_server[256] = "localhost";
+    int porta = SERVER_PORT;
+    weather_request_t richiesta;
+    memset(&richiesta, 0, sizeof(richiesta));
+    int richiesta_trovata = 0;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
+            strncpy(nome_server, argv[++i], sizeof(nome_server)-1);
+            nome_server[sizeof(nome_server)-1] = '\0';
+        }
+        else if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) {
+            porta = atoi(argv[++i]);
+        }
+        else if (strcmp(argv[i], "-r") == 0 && i + 1 < argc) {
+            richiesta_trovata = 1;
+            char *stringa_richiesta = argv[++i];
+
+            /* Verifica tabulazioni non ammesse */
+            for (int k = 0; stringa_richiesta[k] != '\0'; k++) {
+                if (stringa_richiesta[k] == '\t') {
+                    printf("Errore: la richiesta non può contenere caratteri di tabulazione\n");
+                    return 1;
+                }
+            }
+
+            /* Primo token deve essere singolo carattere (type) */
+            if (strlen(stringa_richiesta) < 3) {
+                printf("Errore: formato richiesta non valido\n");
+                usage(argv[0]);
+                return 1;
+            }
+            richiesta.type = stringa_richiesta[0];
+
+            if (stringa_richiesta[1] != ' ' && stringa_richiesta[1] != '\0') {
+                printf("Errore: il tipo deve essere un singolo carattere\n");
+                return 1;
+            }
+
+            /* Salta il primo carattere e gli spazi */
+            int idx = 1;
+            while (stringa_richiesta[idx] == ' ') idx++;
+            if (stringa_richiesta[idx] == '\0') {
+                printf("Errore: nome città mancante\n");
+                usage(argv[0]);
+                return 1;
+            }
+
+            /* Copia la città (max 63 + \0) */
+            strncpy(richiesta.city, &stringa_richiesta[idx], sizeof(richiesta.city)-1);
+            richiesta.city[sizeof(richiesta.city)-1] = '\0';
+
+            if (strlen(richiesta.city) >= 64) {
+                printf("Errore: il nome della città supera i 63 caratteri\n");
+                return 1;
+            }
+        }
+    }
+
+    if (!richiesta_trovata || richiesta.type == 0 || strlen(richiesta.city) == 0) {
+        usage(argv[0]);
+#if defined WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+
+    /* Risoluzione server: se è un IP oppure un nome host */
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_family = AF_INET; /* IPv4 */
+
+    int gai_ret = getaddrinfo(nome_server, NULL, &hints, &res);
+    struct sockaddr_in srv_addr;
+    char ip_server[INET_ADDRSTRLEN] = {0};
+    char nome_risolto[256] = {0};
+
+    if (gai_ret == 0 && res != NULL) {
+        struct sockaddr_in *addr_in = (struct sockaddr_in *)res->ai_addr;
+        srv_addr = *addr_in;
+        srv_addr.sin_port = htons(porta);
+        inet_ntop(AF_INET, &srv_addr.sin_addr, ip_server, sizeof(ip_server));
+
+        /* reverse lookup per ottenere il nome server (se possibile) */
+        char hostbuf[NI_MAXHOST];
+        if (getnameinfo((struct sockaddr*)res->ai_addr, res->ai_addrlen,
+                        hostbuf, sizeof(hostbuf), NULL, 0, NI_NAMEREQD) == 0) {
+            strncpy(nome_risolto, hostbuf, sizeof(nome_risolto)-1);
+        } else {
+            /* se non è risolvibile, usa il nome fornito dall'utente */
+            strncpy(nome_risolto, nome_server, sizeof(nome_risolto)-1);
+        }
+    } else {
+        fprintf(stderr, "Errore: impossibile risolvere il nome del server '%s'\n", nome_server);
+#if defined WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+
+    /* crea socket UDP */
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0) {
+        perror("Errore creazione socket");
+        freeaddrinfo(res);
+#if defined WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+
+    /* Serializzazione richiesta: type(1) + city(64) */
+    char buffer_richiesta[REQUEST_SIZE];
+    memset(buffer_richiesta, 0, sizeof(buffer_richiesta));
+    int offset = 0;
+    memcpy(buffer_richiesta + offset, &richiesta.type, sizeof(char));
+    offset += sizeof(char);
+    memcpy(buffer_richiesta + offset, richiesta.city, 64);
+    offset += 64;
+
+    /* Invio richiesta */
+    ssize_t sent = sendto(sock, buffer_richiesta, offset, 0,
+                          (struct sockaddr*)&srv_addr, sizeof(srv_addr));
+    if (sent < 0) {
+        perror("Errore invio");
+        CLOSESOCKET(sock);
+        freeaddrinfo(res);
+#if defined WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+
+    /* Ricezione risposta */
+    char buffer_risposta[RESPONSE_SIZE];
+    struct sockaddr_in mittente;
+    socklen_t mittente_len = sizeof(mittente);
+    ssize_t n = recvfrom(sock, buffer_risposta, sizeof(buffer_risposta), 0,
+                         (struct sockaddr*)&mittente, &mittente_len);
+    if (n <= 0) {
+        perror("Errore ricezione dati");
+        CLOSESOCKET(sock);
+        freeaddrinfo(res);
+#if defined WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+
+    /* Deserializzazione risposta */
+    weather_response_t risposta;
+    memset(&risposta, 0, sizeof(risposta));
+    offset = 0;
+    uint32_t net_status;
+    memcpy(&net_status, buffer_risposta + offset, sizeof(net_status));
+    risposta.status = ntohl(net_status);
+    offset += sizeof(net_status);
+    memcpy(&risposta.type, buffer_risposta + offset, sizeof(char));
+    offset += sizeof(char);
+    uint32_t net_float;
+    memcpy(&net_float, buffer_risposta + offset, sizeof(net_float));
+    risposta.value = float_from_net(net_float);
+
+    /* Capitalizza città per output */
+    capitalizza_citta(richiesta.city);
+
+    /* Stampa risultato - formato esatto richiesto */
+    printf("Ricevuto risultato dal server %s (ip %s). ", nome_risolto, ip_server);
+    if (risposta.status == STATUS_OK) {
+        switch (risposta.type) {
+            case 't':
+                printf("%s: Temperatura = %.1f°C\n", richiesta.city, risposta.value);
+                break;
+            case 'h':
+                printf("%s: Umidità = %.1f%%\n", richiesta.city, risposta.value);
+                break;
+            case 'w':
+                printf("%s: Vento = %.1f km/h\n", richiesta.city, risposta.value);
+                break;
+            case 'p':
+                printf("%s: Pressione = %.1f hPa\n", richiesta.city, risposta.value);
+                break;
+            default:
+                printf("Richiesta non valida\n");
+                break;
+        }
+    } else if (risposta.status == STATUS_CITY_NOT_FOUND) {
+        printf("Città non disponibile\n");
+    } else { /* STATUS_INVALID_REQUEST */
+        printf("Richiesta non valida\n");
+    }
+
+    CLOSESOCKET(sock);
+    freeaddrinfo(res);
+#if defined WIN32
+    WSACleanup();
+#endif
+    return 0;
+}

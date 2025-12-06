@@ -1,0 +1,275 @@
+/* server.c - UDP server per servizio meteo (revisione) */
+
+#if defined WIN32
+#include <winsock.h>
+#else
+#include <signal.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <time.h>
+#include "protocol.h"
+
+/* Dimensioni serializzate */
+#define REQUEST_SIZE (1 + 64)                /* type (1) + city (64) */
+#define RESPONSE_SIZE (4 + 1 + 4)            /* status(uint32) + type(1) + value(float->uint32) */
+
+#if defined WIN32
+#define CLOSESOCKET closesocket
+#else
+#define CLOSESOCKET close
+#endif
+
+void clearwinsock() {
+#if defined WIN32
+    WSACleanup();
+#endif
+}
+
+static int running = 1;
+static int server_sock = -1;
+
+void handle_sigint(int signum) {
+    (void)signum;
+    running = 0;
+    if (server_sock >= 0) CLOSESOCKET(server_sock);
+}
+
+/* Funzioni di generazione dati meteo (invariato) */
+float get_temperature() {
+    return -10.0f + (rand() / (float)RAND_MAX) * 50.0f;
+}
+float get_humidity() {
+    return 20.0f + (rand() / (float)RAND_MAX) * 80.0f;
+}
+float get_wind() {
+    return (rand() / (float)RAND_MAX) * 100.0f;
+}
+float get_pressure() {
+    return 950.0f + (rand() / (float)RAND_MAX) * 100.0f;
+}
+
+/* confronto case-insensitive (compatibile) */
+int strcasecmp_custom(const char *s1, const char *s2) {
+    while (*s1 && *s2) {
+        if (tolower((unsigned char)*s1) != tolower((unsigned char)*s2))
+            return (int)(tolower((unsigned char)*s1) - tolower((unsigned char)*s2));
+        s1++; s2++;
+    }
+    return (int)(tolower((unsigned char)*s1) - tolower((unsigned char)*s2));
+}
+
+/* città supportate */
+int is_valid_city(const char *city) {
+    const char *citta_supportate[] = {
+        "Bari", "Roma", "Milano", "Napoli", "Torino",
+        "Palermo", "Genova", "Bologna", "Firenze", "Venezia"
+    };
+    for (int i = 0; i < 10; ++i) {
+        if (strcasecmp_custom(city, citta_supportate[i]) == 0) return 1;
+    }
+    return 0;
+}
+
+/* caratteri invalidi (tab e certi simboli) */
+int has_invalid_chars(const char *city) {
+    for (int i = 0; city[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)city[i];
+        if (c == '\t' || c == '@' || c == '#' || c == '$' ||
+            c == '%' || c == '&' || c == '*' || c == '!' || c == '?')
+            return 1;
+    }
+    return 0;
+}
+
+/* processa la request (business logic - invariata) */
+void process_request(const weather_request_t *req, weather_response_t *resp) {
+    resp->type = req->type;
+
+    if (req->type != 't' && req->type != 'h' && req->type != 'w' && req->type != 'p') {
+        resp->status = STATUS_INVALID_REQUEST;
+        resp->value = 0.0f;
+        return;
+    }
+
+    if (has_invalid_chars(req->city)) {
+        resp->status = STATUS_INVALID_REQUEST;
+        resp->value = 0.0f;
+        return;
+    }
+
+    if (!is_valid_city(req->city)) {
+        resp->status = STATUS_CITY_NOT_FOUND;
+        resp->value = 0.0f;
+        return;
+    }
+
+    resp->status = STATUS_OK;
+    switch (req->type) {
+        case 't': resp->value = get_temperature(); break;
+        case 'h': resp->value = get_humidity(); break;
+        case 'w': resp->value = get_wind(); break;
+        case 'p': resp->value = get_pressure(); break;
+        default: resp->value = 0.0f; break;
+    }
+}
+
+/* Helper: converti float in uint32_t in network byte order */
+uint32_t float_to_net(float f) {
+    uint32_t x;
+    memcpy(&x, &f, sizeof(float));
+    x = htonl(x);
+    return x;
+}
+float float_from_net(uint32_t net) {
+    uint32_t host = ntohl(net);
+    float f;
+    memcpy(&f, &host, sizeof(float));
+    return f;
+}
+
+int main(int argc, char *argv[]) {
+    int porta = SERVER_PORT;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) {
+            porta = atoi(argv[i + 1]);
+            ++i;
+        }
+    }
+
+    srand((unsigned)time(NULL));
+
+#if defined WIN32
+    WSADATA wsa_data;
+    if (WSAStartup(MAKEWORD(2,2), &wsa_data) != 0) {
+        printf("WSAStartup failed\n");
+        return 1;
+    }
+#endif
+
+    /* crea socket UDP */
+    server_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (server_sock < 0) {
+        perror("socket() failed");
+        clearwinsock();
+        return 1;
+    }
+
+    /* bind su INADDR_ANY */
+    struct sockaddr_in srv_addr;
+    memset(&srv_addr, 0, sizeof(srv_addr));
+    srv_addr.sin_family = AF_INET;
+    srv_addr.sin_port = htons(porta);
+    srv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(server_sock, (struct sockaddr*)&srv_addr, sizeof(srv_addr)) < 0) {
+        perror("bind() failed");
+        CLOSESOCKET(server_sock);
+        clearwinsock();
+        return 1;
+    }
+
+    /* setup SIGINT per uscita pulita (solo POSIX) */
+#ifndef WIN32
+    signal(SIGINT, handle_sigint);
+#endif
+
+    printf("Server in ascolto sulla porta %d...\n", porta);
+
+    while (running) {
+        char buffer_richiesta[REQUEST_SIZE];
+        char buffer_risposta[RESPONSE_SIZE];
+        struct sockaddr_storage client_sa;
+        socklen_t client_len = sizeof(client_sa);
+
+        ssize_t n = recvfrom(server_sock, buffer_richiesta, REQUEST_SIZE, 0,
+                             (struct sockaddr*)&client_sa, &client_len);
+        if (n < 0) {
+            /* se interrotto da segnale, esci */
+#ifndef WIN32
+            if (!running) break;
+#endif
+            perror("recvfrom");
+            continue;
+        }
+        if (n < 1) {
+            /* pacchetto troppo piccolo */
+            continue;
+        }
+
+        /* Deserializza richiesta (type + city[64]) */
+        weather_request_t req;
+        memset(&req, 0, sizeof(req));
+        int offset = 0;
+        memcpy(&req.type, buffer_richiesta + offset, sizeof(char));
+        offset += sizeof(char);
+        /* Copia 64 byte city e garantisci null-termination */
+        memcpy(req.city, buffer_richiesta + offset, 64);
+        req.city[63] = '\0';
+
+        /* Ricava nome host ed ip client usando getnameinfo */
+        char hostbuf[NI_MAXHOST];
+        char servbuf[NI_MAXSERV];
+        if (getnameinfo((struct sockaddr*)&client_sa, client_len,
+                        hostbuf, sizeof(hostbuf),
+                        servbuf, sizeof(servbuf),
+                        NI_NAMEREQD) != 0) {
+            /* se fallisce la risoluzione del nome, ottieni indirizzo testuale */
+            if (getnameinfo((struct sockaddr*)&client_sa, client_len,
+                            hostbuf, sizeof(hostbuf),
+                            servbuf, sizeof(servbuf),
+                            NI_NUMERICHOST) != 0) {
+                strncpy(hostbuf, "unknown", sizeof(hostbuf));
+                hostbuf[sizeof(hostbuf)-1] = '\0';
+            }
+        }
+        /* ricava ip testuale (sempre) */
+        char ipbuf[NI_MAXHOST];
+        if (getnameinfo((struct sockaddr*)&client_sa, client_len,
+                        ipbuf, sizeof(ipbuf), NULL, 0, NI_NUMERICHOST) != 0) {
+            strcpy(ipbuf, "unknown");
+        }
+
+        /* Log richiesta (formato richiesto) */
+        printf("Richiesta ricevuta da %s (ip %s): type='%c', city='%s'\n",
+               hostbuf, ipbuf, req.type, req.city);
+
+        /* Processa richiesta */
+        weather_response_t resp;
+        memset(&resp, 0, sizeof(resp));
+        process_request(&req, &resp);
+
+        /* Serializza risposta (status uint32 network order, type char, value float->uint32 network) */
+        offset = 0;
+        uint32_t net_status = htonl(resp.status);
+        memcpy(buffer_risposta + offset, &net_status, sizeof(net_status));
+        offset += sizeof(net_status);
+        memcpy(buffer_risposta + offset, &resp.type, sizeof(char));
+        offset += sizeof(char);
+        uint32_t net_float = float_to_net(resp.value);
+        memcpy(buffer_risposta + offset, &net_float, sizeof(net_float));
+        offset += sizeof(net_float);
+
+        /* Invia risposta al mittente (stesso sockaddr ricevuto) */
+        ssize_t sent = sendto(server_sock, buffer_risposta, offset, 0,
+                              (struct sockaddr*)&client_sa, client_len);
+        if (sent < 0) {
+            perror("sendto");
+            continue;
+        }
+    }
+
+    if (server_sock >= 0) CLOSESOCKET(server_sock);
+    clearwinsock();
+    printf("Server terminato.\n");
+    return 0;
+}
