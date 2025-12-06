@@ -1,38 +1,55 @@
-/*
- * protocol.h
- *
- * Shared header file for UDP client and server
- * Contains protocol definitions, data structures, constants and function prototypes
- */
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
 
-#ifndef PROTOCOL_H_
-#define PROTOCOL_H_
+#if defined WIN32
+#include <winsock.h>
+#else
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#define closesocket close
+#endif
 
-#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <ctype.h>
+#include <stdint.h>   // NECESSARIO PER uint32_t
 
-/*
- * ============================================================================
- * PROTOCOL CONSTANTS
- * ============================================================================
- */
+// Porta di default
+#define SERVER_PORT 56700
 
-// #define ...
+// Dimensioni pacchetti
+#define REQUEST_SIZE   (1 + 64)
+#define RESPONSE_SIZE  (4 + 1 + 4)
 
-/*
- * ============================================================================
- * PROTOCOL DATA STRUCTURES
- * ============================================================================
- */
+// Status codes
+#define STATUS_OK 0
+#define STATUS_CITY_NOT_FOUND 1
+#define STATUS_INVALID_REQUEST 2
 
-// Weather request and response structures 
+// Struttura richiesta client
+typedef struct {
+    char type;
+    char city[64];
+} weather_request_t;
 
-/*
- * ============================================================================
- * FUNCTION PROTOTYPES
- * ============================================================================
- */
+// Struttura risposta server
+typedef struct {
+    unsigned int status;
+    char type;
+    float value;
+} weather_response_t;
 
-// Add here the signatures of the functions you implement
+// Case insensitive
+#ifndef WIN32
+int strcasecmp(const char *s1, const char *s2);
+#else
+#define strcasecmp _stricmp
+#endif
 
-
-#endif /* PROTOCOL_H_ */
+#endif
