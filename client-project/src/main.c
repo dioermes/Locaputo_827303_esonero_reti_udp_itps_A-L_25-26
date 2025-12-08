@@ -85,13 +85,13 @@ int main(int argc,char *argv[]) {
     memcpy(buf,&req.type,1);
     memcpy(buf+1,req.city,64);
 
-    sendto(sock,buf,REQUEST_SIZE,0,(struct sockaddr*)&srv,sizeof(srv));
+    sendto(sock,(void*)buf,REQUEST_SIZE,0,(struct sockaddr*)&srv,sizeof(srv));
 
     // Receive
     char rbuf[RESPONSE_SIZE];
     struct sockaddr_in from;
-    int flen=sizeof(from);
-    int n=recvfrom(sock,rbuf,RESPONSE_SIZE,0,(struct sockaddr*)&from,&flen);
+    socklen_t flen=sizeof(from);
+    int n=recvfrom(sock,(void*)rbuf,RESPONSE_SIZE,0,(struct sockaddr*)&from,&flen);
     if(n<=0) { printf("Errore ricezione\n"); return 1; }
 
     weather_response_t resp;

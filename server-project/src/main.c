@@ -95,7 +95,7 @@ int main(int argc, char *argv[]) {
     }
 
     struct sockaddr_in server_addr, client_addr;
-    int client_len;
+    socklen_t client_len;
 
     memset(&server_addr,0,sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
 
         client_len = sizeof(client_addr);
 
-        int n = recvfrom(server_socket,req_buf,REQUEST_SIZE,0,
+        int n = recvfrom(server_socket,(void*)req_buf,REQUEST_SIZE,0,
                          (struct sockaddr*)&client_addr,&client_len);
         if(n<=0) continue;
 
@@ -151,7 +151,7 @@ int main(int argc, char *argv[]) {
         tmp=htonl(tmp);
         memcpy(resp_buf+off,&tmp,sizeof(float));
 
-        sendto(server_socket,resp_buf,RESPONSE_SIZE,0,
+        sendto(server_socket,(void*)resp_buf,RESPONSE_SIZE,0,
                (struct sockaddr*)&client_addr,client_len);
     }
 }
